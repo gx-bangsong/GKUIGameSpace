@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId =  "io.chaldeaprjkt.gamespace"
-        minSdk = 36
+        minSdk = 34
         targetSdk = 36
         versionCode = 100
         versionName = "0.2"
@@ -93,4 +93,6 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("com.google.dagger:hilt-android:2.57.2")
     kapt("com.google.dagger:hilt-compiler:2.57.2")
+
+    testImplementation("junit:junit:4.13.2")
 }

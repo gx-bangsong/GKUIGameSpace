@@ -19,6 +19,7 @@ import android.animation.ObjectAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Handler
@@ -32,7 +33,13 @@ import io.chaldeaprjkt.gamespace.data.TimerState
 import java.util.Locale
 import kotlin.math.hypot
 
-/** Canvas-rendered 80dp x 96dp timer with click, double-click, long-press and drag support. */
+/**
+ * Timer overlay view.
+ *
+ * The compact rendering is the default because the reference Game Turbo UI uses four small
+ * circular controls in the top-right corner.  A larger card rendering is retained for callers
+ * that use a window larger than the compact touch target.
+ */
 class GameTimerView(
     context: Context,
     timer: GameTimer,
@@ -57,12 +64,11 @@ class GameTimerView(
     private var flashAnimator: ObjectAnimator? = null
 
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x80000000.toInt()
+        color = 0xB0000000.toInt()
         style = Paint.Style.FILL
     }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 3f * density
         strokeCap = Paint.Cap.ROUND
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -108,9 +114,46 @@ class GameTimerView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (isCompact()) drawCompact(canvas) else drawCard(canvas)
+    }
+
+    /** Matches the reference: a small dark circle, MM:SS text and a state glyph underneath. */
+    private fun drawCompact(canvas: Canvas) {
+        val width = width.toFloat()
+        val height = height.toFloat()
+        val centerX = width / 2f
+        val centerY = height / 2f - 2f * density
+        val radius = (minOf(width, height) / 2f - 2f * density).coerceAtLeast(1f)
+
+        backgroundPaint.color = 0xB0000000.toInt()
+        canvas.drawCircle(centerX, centerY, radius, backgroundPaint)
+
+        ringPaint.strokeWidth = 1.2f * density
+        ringPaint.color = renderedTimer.color
+        ringPaint.alpha = 70
+        ringBounds.set(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
+        canvas.drawArc(ringBounds, -90f, 360f, false, ringPaint)
+        ringPaint.alpha = if (renderedTimer.state == TimerState.FINISHED) 220 else 170
+        canvas.drawArc(ringBounds, -90f, 360f * progress(), false, ringPaint)
+
+        val displayMs = renderedTimer.displayMs.coerceAtLeast(0L)
+        textPaint.textSize = 8.5f * density
+        textPaint.color = if (renderedTimer.state == TimerState.FINISHED) {
+            0xFFFF5252.toInt()
+        } else {
+            0xFFF2F5F6.toInt()
+        }
+        val baseline = centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+        canvas.drawText(formatCompactTime(displayMs), centerX, baseline, textPaint)
+        drawStateGlyph(canvas, centerX, height - 8f * density)
+    }
+
+    /** Retains the original larger card rendering for non-compact callers. */
+    private fun drawCard(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
         val radius = 12f * density
+        backgroundPaint.color = 0x80000000.toInt()
         canvas.drawRoundRect(0f, 0f, width, height, radius, radius, backgroundPaint)
 
         val centerX = width / 2f
@@ -122,7 +165,7 @@ class GameTimerView(
             centerX + ringRadius,
             centerY + ringRadius,
         )
-
+        ringPaint.strokeWidth = 3f * density
         ringPaint.color = renderedTimer.color
         ringPaint.alpha = 90
         canvas.drawArc(ringBounds, -90f, 360f, false, ringPaint)
@@ -137,10 +180,51 @@ class GameTimerView(
             0xFFFFFFFF.toInt()
         }
         val baseline = centerY - (textPaint.ascent() + textPaint.descent()) / 2f
-        canvas.drawText(formatTime(displayMs), centerX, baseline, textPaint)
+        canvas.drawText(formatCardTime(displayMs), centerX, baseline, textPaint)
 
-        val label = renderedTimer.label.take(MAX_LABEL_LENGTH)
-        canvas.drawText(label, centerX, height - 10f * density, labelPaint)
+        canvas.drawText(renderedTimer.label.take(MAX_LABEL_LENGTH), centerX, height - 10f * density, labelPaint)
+    }
+
+    private fun drawStateGlyph(canvas: Canvas, centerX: Float, centerY: Float) {
+        when (renderedTimer.state) {
+            TimerState.RUNNING -> {
+                val size = 5f * density
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFF2196F3.toInt()
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRoundRect(
+                    centerX - size,
+                    centerY - size,
+                    centerX + size,
+                    centerY + size,
+                    1.5f * density,
+                    1.5f * density,
+                    paint,
+                )
+            }
+            TimerState.FINISHED -> {
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFFF5252.toInt()
+                    style = Paint.Style.FILL
+                }
+                canvas.drawCircle(centerX, centerY, 4f * density, paint)
+            }
+            TimerState.IDLE, TimerState.PAUSED -> {
+                val size = 5f * density
+                val path = Path().apply {
+                    moveTo(centerX - size / 2f, centerY - size)
+                    lineTo(centerX + size, centerY)
+                    lineTo(centerX - size / 2f, centerY + size)
+                    close()
+                }
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = 0xFFE7EEF1.toInt()
+                    style = Paint.Style.FILL
+                }
+                canvas.drawPath(path, paint)
+            }
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -212,6 +296,8 @@ class GameTimerView(
         super.onDetachedFromWindow()
     }
 
+    private fun isCompact(): Boolean = width <= dp(COMPACT_SIZE_DP) && height <= dp(COMPACT_SIZE_DP)
+
     private fun progress(): Float {
         val duration = renderedTimer.durationSeconds.coerceAtLeast(1) * 1_000L
         return when (renderedTimer.mode) {
@@ -236,12 +322,23 @@ class GameTimerView(
         alpha = 1f
     }
 
+    private fun dp(value: Int): Float = value * density
+
     companion object {
         private const val LONG_PRESS_MS = 500L
         private const val DOUBLE_TAP_TIMEOUT_MS = 300L
         private const val MAX_LABEL_LENGTH = 12
+        private const val COMPACT_SIZE_DP = 56
 
-        fun formatTime(milliseconds: Long): String {
+        /** Compact format used by the Xiaomi-style overlay: MM:SS, including sub-minute values. */
+        fun formatTime(milliseconds: Long): String = formatCompactTime(milliseconds)
+
+        fun formatCompactTime(milliseconds: Long): String {
+            val totalSeconds = milliseconds.coerceAtLeast(0L) / 1_000L
+            return String.format(Locale.US, "%02d:%02d", totalSeconds / 60L, totalSeconds % 60L)
+        }
+
+        fun formatCardTime(milliseconds: Long): String {
             val millis = milliseconds.coerceAtLeast(0L)
             return if (millis < 60_000L) {
                 val seconds = millis / 1_000L

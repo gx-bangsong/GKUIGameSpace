@@ -256,7 +256,7 @@ class GameTimerManager(
             .associateBy { it.id }
 
         return (1..GameTimer.MAX_TIMERS).map { id ->
-            val timer = saved[id]?.copy() ?: GameTimer(id = id, isVisible = id == 1)
+            val timer = saved[id]?.copy() ?: defaultTimer(id)
             timer.durationSeconds = timer.durationSeconds.coerceIn(1, MAX_DURATION_SECONDS)
             timer.remainingMs = timer.remainingMs.coerceIn(0L, timer.durationSeconds * 1_000L)
             timer.elapsedMs = timer.elapsedMs.coerceAtLeast(0L)
@@ -278,7 +278,14 @@ class GameTimerManager(
     }
 
     private fun defaultTimers(): List<GameTimer> =
-        (1..GameTimer.MAX_TIMERS).map { GameTimer(id = it, isVisible = it == 1) }
+        (1..GameTimer.MAX_TIMERS).map(::defaultTimer)
+
+    private fun defaultTimer(id: Int): GameTimer = GameTimer(
+        id = id,
+        isVisible = id <= DEFAULT_VISIBLE_TIMERS,
+        posX = DEFAULT_FIRST_X + (id - 1) * DEFAULT_STEP_X,
+        posY = DEFAULT_Y,
+    )
 
     private fun keyFor(packageName: String) = "$KEY_PREFIX$packageName"
 
@@ -287,5 +294,9 @@ class GameTimerManager(
         private const val KEY_PREFIX = "timers_"
         private const val TICK_MS = 16L
         private const val MAX_DURATION_SECONDS = 24 * 60 * 60
+        private const val DEFAULT_VISIBLE_TIMERS = 4
+        private const val DEFAULT_FIRST_X = 0.74f
+        private const val DEFAULT_STEP_X = 0.052f
+        private const val DEFAULT_Y = 0.10f
     }
 }

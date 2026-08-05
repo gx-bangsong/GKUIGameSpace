@@ -102,6 +102,7 @@ def main() -> int:
         "app/src/test/java/io/chaldeaprjkt/gamespace/data/GameTimerTest.kt",
         "app/src/test/java/io/chaldeaprjkt/gamespace/data/ComboSequenceTest.kt",
         "app/src/test/java/io/chaldeaprjkt/gamespace/gamebar/VideoAppDetectorTest.kt",
+        "app/src/test/java/io/chaldeaprjkt/gamespace/gamebar/GameTimerViewTest.kt",
     ):
         if not (ROOT / relative).is_file():
             failures.append(f"missing test file: {relative}")

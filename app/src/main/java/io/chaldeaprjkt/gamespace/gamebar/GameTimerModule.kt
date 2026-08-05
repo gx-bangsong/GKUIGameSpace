@@ -158,8 +158,8 @@ class GameTimerModule(
             onEdit = { editTimer(it) },
         )
         val lp = WindowManager.LayoutParams(
-            dp(80),
-            dp(96),
+            dp(COMPACT_TIMER_DP),
+            dp(COMPACT_TIMER_DP),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -218,8 +218,8 @@ class GameTimerModule(
 
     private fun positionFor(timer: GameTimer, view: View): Position {
         val bounds = windowManager.maximumWindowMetrics.bounds
-        val width = if (view.width > 0) view.width else dp(80)
-        val height = if (view.height > 0) view.height else dp(96)
+        val width = if (view.width > 0) view.width else dp(COMPACT_TIMER_DP)
+        val height = if (view.height > 0) view.height else dp(COMPACT_TIMER_DP)
         val maxX = (bounds.width() - width).coerceAtLeast(0)
         val maxY = (bounds.height() - height).coerceAtLeast(0)
         return Position(
@@ -232,4 +232,8 @@ class GameTimerModule(
         (value * context.resources.displayMetrics.density).roundToInt()
 
     private data class Position(val x: Int, val y: Int)
+
+    companion object {
+        private const val COMPACT_TIMER_DP = 48
+    }
 }

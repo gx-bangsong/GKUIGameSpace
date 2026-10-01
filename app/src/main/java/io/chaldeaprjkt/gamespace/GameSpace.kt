@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2021 Chaldeaprjkt
  * Copyright (C) 2025 AxionOS
+ * Copyright (C) 2026 GameSpace contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,26 +22,20 @@ import android.content.Intent
 import android.os.UserHandle
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
-import io.chaldeaprjkt.gamespace.gamebar.GameSpaceService
+import io.chaldeaprjkt.gamespace.gamebar.GameSpaceForegroundService
 
 @HiltAndroidApp(Application::class)
 class GameSpace : Hilt_GameSpace() {
-
-    private val TAG = "GameSpace"
+    private val tag = "GameSpace"
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "Application created")
-        startGameSpaceService()
-    }
-
-    private fun startGameSpaceService() {
-        try {
-            val intent = Intent(this, GameSpaceService::class.java)
-            startServiceAsUser(intent, UserHandle.CURRENT)
-            Log.i(TAG, "GameSpaceService started")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start GameSpaceService", e)
-        }
+        Log.d(tag, "Application created")
+        runCatching {
+            startServiceAsUser(
+                Intent(this, GameSpaceForegroundService::class.java),
+                UserHandle.CURRENT,
+            )
+        }.onFailure { Log.e(tag, "Unable to start foreground mode observer", it) }
     }
 }

@@ -64,7 +64,6 @@ import com.android.compose.animation.scene.SceneTransitionLayout
 import com.android.compose.animation.scene.SwipeDetector
 import com.android.compose.animation.scene.rememberMutableSceneTransitionLayoutState
 import io.chaldeaprjkt.gamespace.R
-import io.chaldeaprjkt.gamespace.data.GameSpaceMode
 
 private const val PILL_WIDTH_DP = 36
 private const val PILL_BUTTON_SIZE_DP = 40
@@ -81,7 +80,6 @@ fun GameBarView(
     isLocked: Boolean,
     isIdle: Boolean,
     idleAlpha: Float,
-    mode: GameSpaceMode,
     dockedOnLeft: Boolean,
     mapperEnabled: Boolean,
     onShowPanel: () -> Unit,
@@ -181,7 +179,7 @@ fun GameBarView(
             scene(GameBarScenes.Pill) {
                 PillTab(
                     dockedOnLeft = dockedOnLeft,
-                    showFps = showFps && mode is GameSpaceMode.GameMode,
+                    showFps = showFps,
                     fpsText = fpsText,
                     idleAlpha = animatedPillAlpha,
                     pointerModifier = pointerModifier,
@@ -197,7 +195,7 @@ fun GameBarView(
                     isLocked = isLocked,
                     mapperEnabled = mapperEnabled,
                     dockedOnLeft = dockedOnLeft,
-                    showFps = showFps && mode is GameSpaceMode.GameMode,
+                    showFps = showFps,
                     onToggleFps = onToggleFps,
                     onShowPanel = onShowPanel,
                     onToggleLock = onToggleLock,

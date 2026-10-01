@@ -47,6 +47,11 @@ import io.chaldeaprjkt.gamespace.utils.ScreenUtils
 import io.chaldeaprjkt.gamespace.utils.isServiceRunning
 import javax.inject.Inject
 
+/**
+ * Session host for the upstream crDroid 17.0 game-mode entry point and the custom video mode.
+ * SystemUI/framework starts this service with ACTION_START when a configured game is focused;
+ * GameSpaceForegroundService uses the video actions for the additional video-app mode.
+ */
 @AndroidEntryPoint(Service::class)
 class SessionService : Hilt_SessionService() {
     @Inject lateinit var appSettings: AppSettings
@@ -63,7 +68,7 @@ class SessionService : Hilt_SessionService() {
 
     private var currentPackage: String? = null
     private lateinit var gameManager: GameManager
-    private lateinit var sidebar: GameSideBar
+    private lateinit var sidebar: GameSidebar
     private lateinit var mapperController: MapperController
     private lateinit var platform: AxPlatformClient
     private lateinit var toolbar: GameSpaceToolbar
@@ -82,26 +87,19 @@ class SessionService : Hilt_SessionService() {
 
         platform = AxPlatformClient.getInstance()
         platform.init(this)
-
         gameManager = getSystemService(Context.GAME_SERVICE) as GameManager
         gameModeUtils.bind(gameManager)
         tileRepository.init(platform)
 
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val mainHandler = Handler(Looper.getMainLooper())
-
-        mapperController = MapperController(
-            context = this,
-            wm = windowManager,
-            handler = mainHandler,
-            gson = gson,
-        )
+        mapperController = MapperController(this, windowManager, mainHandler, gson)
         toolbar = GameSpaceToolbar()
         timerModule = GameTimerModule(this, windowManager)
         comboModule = AutoComboModule(this, windowManager)
         videoModule = VideoToolboxModule(this, windowManager)
 
-        sidebar = GameSideBar(
+        sidebar = GameSidebar(
             context = this,
             wm = windowManager,
             handler = mainHandler,
@@ -160,45 +158,44 @@ class SessionService : Hilt_SessionService() {
     }
 
     private fun switchTo(newMode: GameSpaceMode) {
-        val newPackage = when (newMode) {
+        val packageName = when (newMode) {
             is GameSpaceMode.GameMode -> newMode.packageName
             is GameSpaceMode.VideoMode -> newMode.packageName
             GameSpaceMode.Idle -> null
         }
-        if (newPackage == null) {
+        if (packageName == null) {
             stopSession()
             return
         }
 
-        var currentMode = if (::modeManager.isInitialized) modeManager.mode.value else GameSpaceMode.Idle
-        if (currentPackage != newPackage) {
+        var oldMode = if (::modeManager.isInitialized) modeManager.mode.value else GameSpaceMode.Idle
+        if (currentPackage != packageName) {
             if (currentPackage != null) stopSession()
-            currentPackage = newPackage
-            currentMode = GameSpaceMode.Idle
+            currentPackage = packageName
+            oldMode = GameSpaceMode.Idle
         }
 
-        if (newMode is GameSpaceMode.GameMode && currentMode !is GameSpaceMode.GameMode) {
+        if (newMode is GameSpaceMode.GameMode && oldMode !is GameSpaceMode.GameMode) {
             session.unregister()
-            session.register(newPackage)
-            applyGameModeConfig(newPackage)
+            session.register(packageName)
+            applyGameModeConfig(packageName)
             applyAutoDnd()
-            sidebar.onGameStart(newPackage)
+            sidebar.onGameStart(packageName)
             callListener.init()
-        } else if (newMode is GameSpaceMode.VideoMode && currentMode !is GameSpaceMode.VideoMode) {
-            if (currentMode is GameSpaceMode.GameMode) {
+        } else if (newMode is GameSpaceMode.VideoMode && oldMode !is GameSpaceMode.VideoMode) {
+            if (oldMode is GameSpaceMode.GameMode) {
                 sidebar.onGameModeExit()
                 session.unregister()
                 callListener.destroy()
                 restoreAutoDnd()
             }
-            sidebar.onVideoStart(newPackage)
+            sidebar.onVideoStart(packageName)
         }
         modeManager.switchMode(newMode)
     }
 
     private fun stopSession() {
         if (!::modeManager.isInitialized || currentPackage == null) return
-        Log.i(TAG, "Stopping GameSpace session for $currentPackage")
         val wasGame = modeManager.mode.value is GameSpaceMode.GameMode
         modeManager.switchMode(GameSpaceMode.Idle)
         if (wasGame) timerModule.onGameExit()
@@ -211,13 +208,13 @@ class SessionService : Hilt_SessionService() {
 
     private fun applyAutoDnd() {
         if (!appSettings.autoDnd) return
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val currentFilter = nm.currentInterruptionFilter
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val currentFilter = notificationManager.currentInterruptionFilter
         if (currentFilter == NotificationManager.INTERRUPTION_FILTER_ALL ||
             currentFilter == NotificationManager.INTERRUPTION_FILTER_UNKNOWN
         ) {
             previousDndFilter = currentFilter
-            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
             dndEnabledByUs = true
         }
     }
@@ -225,17 +222,16 @@ class SessionService : Hilt_SessionService() {
     private fun restoreAutoDnd() {
         if (!dndEnabledByUs) return
         dndEnabledByUs = false
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.setInterruptionFilter(previousDndFilter)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.setInterruptionFilter(previousDndFilter)
     }
 
-    private fun applyGameModeConfig(app: String) {
-        val userGame = settings.userGames.firstOrNull { it.packageName == app }
+    private fun applyGameModeConfig(packageName: String) {
+        val userGame = settings.userGames.firstOrNull { it.packageName == packageName }
         val preferred = userGame?.mode ?: GameModeUtils.defaultPreferredMode
         gameModeUtils.activeGame = userGame
-        val availableModes = gameManager.getAvailableGameModes(app)
-        if (availableModes.contains(preferred)) {
-            gameManager.setGameMode(app, preferred)
+        if (gameManager.getAvailableGameModes(packageName).contains(preferred)) {
+            gameManager.setGameMode(packageName, preferred)
         }
     }
 
@@ -263,12 +259,12 @@ class SessionService : Hilt_SessionService() {
         const val MODE_VIDEO = "video"
         const val MODE_IDLE = "idle"
 
-        fun start(context: Context, app: String) {
-            startService(context, ACTION_START, app, MODE_GAME)
+        fun start(context: Context, packageName: String) {
+            send(context, ACTION_START, packageName, MODE_GAME)
         }
 
-        fun startVideo(context: Context, app: String) {
-            startService(context, ACTION_START_VIDEO, app, MODE_VIDEO)
+        fun startVideo(context: Context, packageName: String) {
+            send(context, ACTION_START_VIDEO, packageName, MODE_VIDEO)
         }
 
         fun switchMode(context: Context, mode: GameSpaceMode) {
@@ -282,7 +278,7 @@ class SessionService : Hilt_SessionService() {
                 is GameSpaceMode.VideoMode -> mode.packageName
                 GameSpaceMode.Idle -> null
             }
-            startService(context, ACTION_SWITCH_MODE, packageName, modeName)
+            send(context, ACTION_SWITCH_MODE, packageName, modeName)
         }
 
         fun stop(context: Context) {
@@ -292,12 +288,7 @@ class SessionService : Hilt_SessionService() {
             }.let { context.startServiceAsUser(it, UserHandle.CURRENT) }
         }
 
-        private fun startService(
-            context: Context,
-            action: String,
-            packageName: String?,
-            mode: String,
-        ) {
+        private fun send(context: Context, action: String, packageName: String?, mode: String) {
             Intent(context, SessionService::class.java).apply {
                 this.action = action
                 putExtra(EXTRA_PACKAGE_NAME, packageName)

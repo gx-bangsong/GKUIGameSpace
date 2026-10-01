@@ -18,6 +18,7 @@ REQUIRED_FILES = [
     "app/src/main/java/io/chaldeaprjkt/gamespace/data/VideoToolboxState.kt",
     "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/VideoAppDetector.kt",
     "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameSpaceModeManager.kt",
+    "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameSpaceForegroundService.kt",
     "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameTimerManager.kt",
     "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameTimerView.kt",
     "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/TimerEditDialog.kt",
@@ -51,9 +52,9 @@ REQUIRED_TEXT = {
         "CREATE TABLE $ACTIONS",
         "SQLiteOpenHelper",
     ),
-    "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameSpaceService.kt": (
+    "app/src/main/java/io/chaldeaprjkt/gamespace/gamebar/GameSpaceForegroundService.kt": (
         "TaskStackListener",
-        "onForegroundAppChanged",
+        "refreshForegroundPackage",
     ),
 }
 REQUIRED_PERMISSIONS = (

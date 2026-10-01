@@ -35,10 +35,6 @@ import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -61,7 +57,6 @@ import com.android.axion.platform.AxPlatformClient
 import io.chaldeaprjkt.gamespace.BuildFlags
 import io.chaldeaprjkt.gamespace.R
 import io.chaldeaprjkt.gamespace.data.AppSettings
-import io.chaldeaprjkt.gamespace.data.GameSpaceMode
 import io.chaldeaprjkt.gamespace.data.SystemSettings
 import io.chaldeaprjkt.gamespace.gamebar.brightness.*
 import io.chaldeaprjkt.gamespace.gamebar.fps.*
@@ -85,10 +80,6 @@ class GameSidebar(
     private val tileRepository: TileRepository,
     private val platform: AxPlatformClient,
     private val mapperController: MapperController,
-    private val toolbar: GameSpaceToolbar,
-    private val timerModule: GameTimerModule,
-    private val comboModule: AutoComboModule,
-    private val videoModule: VideoToolboxModule,
 ) {
     private val gameBarLayoutParam = createGameBarLayoutParam()
     private val panelLayoutParam = createPanelLayoutParam()
@@ -151,14 +142,12 @@ class GameSidebar(
                         CompositionLocalProvider(
                             LocalOnBackPressedDispatcherOwner provides noOpBackDispatcherOwner,
                         ) {
-                            val mode by toolbar.mode.collectAsState()
                             MaterialExpressiveTheme(
                             colorScheme = dynamicDarkColorScheme(context),
                             motionScheme = MotionScheme.expressive(),
                         ) {
                             GameBarView(
                                 showFps = showFpsState.value,
-                                mode = mode,
                                 fpsText = fpsTextState.value,
                                 isLocked = isLockedState.value,
                                 isIdle = isIdleState.value,
@@ -230,40 +219,24 @@ class GameSidebar(
             mapperController.onGameStart(packageName)
         }
         platform.addListener(recordingListener)
-        showToolbarWindow()
-    }
-
-    fun onVideoStart(packageName: String) {
-        showToolbarWindow()
-    }
-
-    private fun showToolbarWindow() {
-        shouldClose = false
         handler.post {
             if (!::gameBarView.isInitialized) return@post
             runCatching {
-                if (gameBarView.parent == null) {
-                    dockGameBar()
-                    wm.addView(gameBarView, gameBarLayoutParam)
-                }
+                dockGameBar()
+                wm.addView(gameBarView, gameBarLayoutParam)
                 gameBarView.visibility = View.INVISIBLE
                 gameBarView.alpha = 0f
-                handler.removeCallbacks(firstPaint)
                 handler.postDelayed(firstPaint, 500)
             }
         }
     }
 
-    fun onGameModeExit() {
+    fun onGameLeave() {
         mapperController.onGameLeave()
         platform.removeListener(recordingListener)
         stopFpsTracking()
-        setGestureLock(false)
-    }
-
-    fun onGameLeave() {
-        onGameModeExit()
         shouldClose = true
+        setGestureLock(false)
         handler.removeCallbacksAndMessages(null)
         forceRemovePanel()
         runCatching { wm.removeViewImmediate(gameBarView) }
@@ -281,8 +254,6 @@ class GameSidebar(
 
     fun onConfigurationChanged(newConfig: Configuration) {
         mapperController.onConfigurationChanged(newConfig)
-        timerModule.onConfigurationChanged()
-        comboModule.onConfigurationChanged()
         updateScreenMetrics()
         forceRemovePanel()
         if (gameBarView.visibility != View.VISIBLE) {
@@ -472,57 +443,15 @@ class GameSidebar(
                         indication = null,
                     ) {}
             ) {
-                val mode by toolbar.mode.collectAsState()
-                val timerVisible by timerModule.isVisible.collectAsState()
-                val combos by comboModule.combos.collectAsState()
-                val recording by comboModule.isRecording.collectAsState()
-                val videoState by videoModule.state.collectAsState()
-
-                AnimatedContent(
-                    targetState = mode,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(150)) togetherWith
-                            fadeOut(animationSpec = tween(150))
-                    },
-                    label = "game_video_mode_content",
-                ) { activeMode ->
-                    when (activeMode) {
-                        is GameSpaceMode.GameMode -> Column(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            GameModeFeatureButtons(
-                                timerVisible = timerVisible,
-                                comboAvailable = combos.isNotEmpty() || recording,
-                                onToggleTimer = { timerModule.toggle() },
-                                onToggleCombo = {
-                                    if (recording) comboModule.stopRecording()
-                                    else if (combos.isEmpty()) comboModule.startRecording()
-                                    else comboModule.toggleSelected()
-                                },
-                            )
-                            GamePanelCard(
-                                interactor = brightnessInteractor,
-                                fpsInteractor = fpsInteractor,
-                                apps = apps,
-                                gameModeUtils = gameModeUtils,
-                                systemSettings = settings,
-                                tileRepository = tileRepository,
-                                maxHeight = panelMaxHeight,
-                            )
-                        }
-                        is GameSpaceMode.VideoMode -> VideoToolboxView(
-                            state = videoState,
-                            onToggleScreenOffAudio = videoModule::toggleScreenOffAudio,
-                            onToggleOrientationLock = videoModule::toggleOrientationLock,
-                            onScheduleClose = videoModule::scheduleClose,
-                            onCancelClose = videoModule::cancelClose,
-                            onCast = videoModule::openCastSettings,
-                            onCycleQuality = videoModule::cycleQuality,
-                            onDanmaku = videoModule::showDanmakuGuide,
-                        )
-                        GameSpaceMode.Idle -> Unit
-                    }
-                }
+                GamePanelCard(
+                    interactor = brightnessInteractor,
+                    fpsInteractor = fpsInteractor,
+                    apps = apps,
+                    gameModeUtils = gameModeUtils,
+                    systemSettings = settings,
+                    tileRepository = tileRepository,
+                    maxHeight = panelMaxHeight,
+                )
             }
         }
     }
